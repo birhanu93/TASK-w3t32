@@ -1,0 +1,38 @@
+{
+  "name": "training-assessment-backend",
+  "version": "1.0.0",
+  "description": "Training Assessment & Content Governance Backend - offline-first fitness and skills evaluation",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "knex migrate:latest --knexfile src/db/knexfile.js",
+    "migrate:rollback": "knex migrate:rollback --knexfile src/db/knexfile.js",
+    "seed": "knex seed:run --knexfile src/db/knexfile.js",
+    "test": "NODE_ENV=test node --test tests/unit/*.test.js tests/api/*.test.js",
+    "test:unit": "NODE_ENV=test node --test tests/unit/*.test.js",
+    "test:api": "NODE_ENV=test node --test tests/api/*.test.js",
+    "test:integration": "NODE_ENV=test node --test tests/integration/*.test.js",
+    "test:ci": "NODE_ENV=test node --test tests/unit/*.test.js tests/api/*.test.js tests/integration/*.test.js"
+  },
+  "dependencies": {
+    "koa": "^2.15.3",
+    "koa-router": "^12.0.1",
+    "koa-bodyparser": "^4.4.1",
+    "koa-json": "^2.0.2",
+    "koa-logger": "^3.2.1",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0",
+    "argon2": "^0.41.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^10.0.0",
+    "csv-parse": "^5.5.6",
+    "csv-stringify": "^6.5.1",
+    "ajv": "^8.17.1",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

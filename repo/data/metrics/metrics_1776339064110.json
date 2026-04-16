@@ -1,0 +1,8 @@
+{
+  "total_requests": 1,
+  "total_errors": 0,
+  "p95_latency_ms": 0,
+  "avg_latency_ms": 0,
+  "started_at": "2026-04-16T11:31:04.109Z",
+  "snapshot_at": "2026-04-16T11:31:04.110Z"
+}
