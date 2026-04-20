@@ -8,7 +8,10 @@ const { authenticate } = require('../middleware/auth');
 const { requireRole, requirePermission } = require('../middleware/rbac');
 
 const router = new Router({ prefix: '/api/data' });
-const ajv = new Ajv({ allErrors: true });
+// strict:false lets AJV accept the `format: "uuid"` hint on schema properties
+// without requiring the ajv-formats dependency (we only use format as a
+// documentation hint; real uuid validation happens at the DB layer).
+const ajv = new Ajv({ allErrors: true, strict: false });
 
 // ── Sensitive field protection ──────────────────────────────────────────
 

@@ -18,7 +18,7 @@ router.get('/cases', authenticate(), requirePermission('content.moderate'), asyn
 
   if (status) query = query.where('moderation_cases.status', status);
 
-  const [{ count }] = await query.clone().count();
+  const [{ count }] = await query.clone().clearSelect().count();
   const cases = await query.orderBy('moderation_cases.created_at', 'desc').offset(offset).limit(per_page);
 
   ctx.body = {

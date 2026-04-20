@@ -142,7 +142,7 @@ router.get('/leaderboard', authenticate(), async (ctx) => {
   if (level) query = query.where('rankings.level', level);
 
   const offset = (page - 1) * per_page;
-  const [{ count }] = await query.clone().count();
+  const [{ count }] = await query.clone().clearSelect().count();
   const rankings = await query
     .orderBy('rankings.rolling_avg_score', 'desc')
     .offset(offset)
@@ -247,10 +247,12 @@ router.post('/config', authenticate(), requirePermission('rankings.manage_config
   await ctx.audit({
     action: 'ranking_config.upsert',
     resourceType: 'ranking_config',
-    resourceId: assessment_type,
+    // resource_id is uuid-typed; the row PK is the correct value. The
+    // human-readable assessment_type goes in details for searchability.
+    resourceId: ctx.body?.id || null,
     beforeState: existing || null,
     afterState: ctx.body,
-    details: { window_days, thresholds },
+    details: { assessment_type, window_days, thresholds },
   });
 });
 

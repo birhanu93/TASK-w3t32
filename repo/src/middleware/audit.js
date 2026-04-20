@@ -104,7 +104,11 @@ function auditMiddleware() {
       // Derive resource info from the request path
       const pathParts = ctx.path.split('/').filter(Boolean); // e.g. ['api','plans','123']
       const resourceType = pathParts[1] || 'unknown'; // e.g. 'plans'
-      const resourceId = pathParts[2] || null;
+      // Only accept a path segment as resourceId if it looks like a UUID —
+      // otherwise routes like /api/rankings/compute would try to store
+      // 'compute' in the uuid-typed resource_id column and 500 the request.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const resourceId = pathParts[2] && UUID_RE.test(pathParts[2]) ? pathParts[2] : null;
 
       // Auto-audit captures the response body as afterState to produce a real hash.
       // For DELETE methods, the request body serves as beforeState.

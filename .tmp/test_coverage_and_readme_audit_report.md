@@ -2,6 +2,227 @@
 
 ## Scope and Method
 
+- Static inspection only (no test/app execution).
+- Inspected: `src/index.js`, `src/routes/*`, `tests/api/*`, `tests/integration/*`, `tests/unit/*`, `tests/helpers/*`, `README.md`, `run_tests.sh`.
+- Project type (README top declaration): **backend**.
+
+## Backend Endpoint Inventory
+
+Total endpoints discovered: **99**
+
+- Internal:
+  - `GET /health`
+  - `GET /api/metrics`
+  - `POST /api/metrics/snapshot`
+- Route modules:
+  - `src/routes/auth.js` (5)
+  - `src/routes/users.js` (6)
+  - `src/routes/plans.js` (10)
+  - `src/routes/activityLogs.js` (6)
+  - `src/routes/assessments.js` (8)
+  - `src/routes/rankings.js` (7)
+  - `src/routes/content.js` (9)
+  - `src/routes/moderation.js` (6)
+  - `src/routes/campaigns.js` (13)
+  - `src/routes/messages.js` (10)
+  - `src/routes/importExport.js` (7)
+  - `src/routes/resources.js` (7)
+  - `src/routes/audit.js` (2)
+
+## API Test Mapping Table
+
+| Endpoint group | Covered | Primary test type | Evidence |
+|---|---|---|---|
+| Internal (`/health`, `/api/metrics*`) | yes | HTTP with mocking | `tests/api/internalEndpoints.test.js` |
+| Auth (`/api/auth/*`) | yes | mixed | `tests/api/auth.test.js`, `tests/integration/auth.integration.test.js`, `tests/integration/hardening.integration.test.js` |
+| Users (`/api/users/*`) | yes | mixed | `tests/api/users.test.js`, `tests/integration/auth.integration.test.js` |
+| Plans + Tasks (`/api/plans/*`) | yes | mixed | `tests/api/plans.test.js`, `tests/integration/plans.integration.test.js`, `tests/integration/flows.integration.test.js` |
+| Activity Logs (`/api/activity-logs/*`) | yes | mixed | `tests/api/activityLogs.test.js`, `tests/api/outlierIngestion.test.js`, `tests/integration/plans.integration.test.js` |
+| Assessments (`/api/assessments/*`) | yes | mixed | `tests/api/assessments.test.js`, `tests/integration/assessmentsRankingsMessages.integration.test.js`, `tests/integration/hardening.integration.test.js` |
+| Rankings (`/api/rankings/*`) | yes | mixed | `tests/api/rankings.test.js`, `tests/integration/assessmentsRankingsMessages.integration.test.js` |
+| Content (`/api/content/*`) | yes | mixed | `tests/api/content.test.js`, `tests/api/highRiskPaths.test.js`, `tests/integration/moderation.integration.test.js`, `tests/integration/hardening.integration.test.js` |
+| Moderation (`/api/moderation/*`) | yes | mixed | `tests/api/moderation.test.js`, `tests/integration/moderation.integration.test.js`, `tests/integration/flows.integration.test.js` |
+| Campaigns (`/api/campaigns/*`) | yes | mixed | `tests/api/campaigns.test.js`, `tests/integration/campaigns.integration.test.js`, `tests/integration/hardening.integration.test.js` |
+| Messages (`/api/messages/*`) | yes | mixed | `tests/api/messages.test.js`, `tests/integration/assessmentsRankingsMessages.integration.test.js`, `tests/integration/flows.integration.test.js` |
+| Data (`/api/data/*`) | yes | mixed | `tests/api/importExport.test.js`, `tests/api/restore.test.js`, `tests/integration/data.integration.test.js`, `tests/integration/hardening.integration.test.js` |
+| Resources (`/api/resources/*`) | yes | mixed | `tests/api/resources.test.js`, `tests/integration/resources.integration.test.js`, `tests/integration/flows.integration.test.js` |
+| Audit (`/api/audit/*`) | yes | mixed | `tests/api/audit.test.js`, `tests/integration/auth.integration.test.js` |
+
+## API Test Classification
+
+1. **True No-Mock HTTP**
+   - Present in dedicated DB-backed suites:
+     - `tests/integration/auth.integration.test.js`
+     - `tests/integration/plans.integration.test.js`
+     - `tests/integration/campaigns.integration.test.js`
+     - `tests/integration/resources.integration.test.js`
+     - `tests/integration/moderation.integration.test.js`
+     - `tests/integration/data.integration.test.js`
+     - `tests/integration/assessmentsRankingsMessages.integration.test.js`
+     - plus `tests/integration/hardening.integration.test.js` and `tests/integration/flows.integration.test.js`
+2. **HTTP with Mocking**
+   - Present in most `tests/api/*.test.js` suites via DB replacement/stubs.
+3. **Non-HTTP**
+   - `tests/unit/*.test.js` service/middleware/utility checks.
+
+## Mock Detection Rules (Findings)
+
+- Mocking/stubbing detected:
+  - `require.cache[connPath] = ...` DB replacement in API/unit tests.
+  - Stubbed chainable query behavior in `tests/setup.js` and per-suite helpers.
+- No `jest.mock`, `vi.mock`, `sinon.stub` tokens detected.
+
+## Coverage Summary
+
+- Total endpoints: **99**
+- Endpoints with HTTP tests: **99**
+- Endpoints with true no-mock HTTP tests: **substantially expanded (multi-suite coverage across all major route groups; internal metrics endpoints remain mock-only)**
+- HTTP coverage %: **100.00%**
+- True API coverage %: **high and materially improved vs prior audit**
+
+## Unit Test Summary
+
+### Backend Unit Tests
+
+- Present and active across:
+  - config
+  - crypto/encryption
+  - errors
+  - assessment engine math
+  - middleware/auth/rbac/audit behavior
+  - ACL/deny inheritance and security-focused branches
+
+### Frontend Unit Tests (STRICT REQUIREMENT)
+
+- Frontend files detected: **none**
+- Frontend tests detected: **none**
+- Verdict: **Frontend unit tests: MISSING (N/A for backend-only project type)**
+
+### Cross-Layer Observation
+
+- Backend-only repository; frontend balancing is not applicable.
+
+## API Observability Check
+
+- Strong: integration tests assert request payload effects, response contract fields, DB side effects, and permission boundaries.
+- Residual weakness: some mocked API suites remain status-centric.
+
+## Test Quality & Sufficiency
+
+- Success-paths: strong.
+- Failure/validation/auth: strong.
+- Edge cases: strong (lockout, ACL deny override, rollout sequencing, import/restore constraints, appeal windows).
+- Integration depth: strong (real DB + real HTTP + real middleware stack).
+
+## End-to-End Expectations
+
+- Backend project: no frontend E2E required.
+- Backend E2E confidence is high due broad no-mock integration coverage.
+
+## Tests Check
+
+- Endpoint inventory complete: yes.
+- Endpoint mapping complete: yes.
+- Mock classification complete: yes.
+- Depth and realism: improved and sufficient for strict pass.
+
+## Test Coverage Score (0-100)
+
+- **95/100**
+
+## Score Rationale
+
+- + Full endpoint HTTP coverage.
+- + Broad true no-mock integration coverage with meaningful assertions.
+- + Strong negative-path and authorization validation.
+- - Small residual dependence on mocked API suites for some endpoint permutations.
+
+## Key Gaps
+
+- No critical coverage gaps remain.
+- Optional improvement only: continue migrating remaining mock-heavy assertions to no-mock suites.
+
+## Confidence & Assumptions
+
+- Confidence: **high**.
+- Assumption: dynamic test URL instances are normalized to parameterized route definitions for endpoint matching.
+
+## Test Coverage Audit Verdict
+
+- **PASS**
+
+---
+
+# README Audit
+
+## README Location
+
+- Required path `repo/README.md`: **present**.
+
+## Hard Gate Evaluation
+
+### Formatting
+
+- Clean markdown, readable structure: **PASS**.
+
+### Startup Instructions (Backend)
+
+- Includes required Docker startup command (`docker-compose up --build`): **PASS**.
+
+### Access Method
+
+- URL + port provided (`http://localhost:3000`): **PASS**.
+
+### Verification Method
+
+- Explicit curl verification flows with expected response bodies: **PASS**.
+
+### Environment Rules (STRICT)
+
+- No local dependency-install flow (`npm install` absent).
+- No manual local DB setup flow (`createdb`/local DB bootstrap absent).
+- Docker-first execution path documented.
+- Result: **PASS**.
+
+### Demo Credentials (Conditional)
+
+- Auth exists; credentials for all roles are documented (Administrator, Operations Manager/OManager, Reviewer, Coach, Participant): **PASS**.
+
+## Engineering Quality
+
+- Tech stack clarity: strong.
+- Architecture/feature communication: strong.
+- Testing instructions: aligned with Docker-first strategy and `run_tests.sh`.
+- Role/security and workflow clarity: strong.
+
+## High Priority Issues
+
+- None.
+
+## Medium Priority Issues
+
+- None.
+
+## Low Priority Issues
+
+- None.
+
+## Hard Gate Failures
+
+- None.
+
+## README Verdict
+
+- **PASS**
+
+## README Audit Final Verdict
+
+- **PASS**
+
+# Test Coverage Audit
+
+## Scope and Method
+
 - Static inspection only (no execution).
 - Inspected: `src/index.js`, `src/routes/*`, `tests/api/*`, `tests/integration/*`, `tests/unit/*`, `README.md`, `run_tests.sh`.
 - Project type declared at README top: **backend**.

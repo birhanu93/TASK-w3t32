@@ -50,16 +50,18 @@ async function req(app, method, path, opts = {}) {
 }
 
 describe('POST /api/rankings/compute', () => {
-  it('should return 400 without assessment_type', async () => {
+  it('should return 400 with an error payload that names assessment_type', async () => {
     const db = () => chain([]); db.raw = () => Promise.resolve({ rows: [] });
     const res = await req(buildApp(db), 'POST', '/api/rankings/compute', {
       headers: { Authorization: authHeader(FIXTURES.participantUser) },
       body: {},
     });
     assert.equal(res.status, 400);
+    assert.ok(res.body.error, 'should include error envelope');
+    assert.match(res.body.error.message, /assessment_type/, 'error message must mention assessment_type');
   });
 
-  it('should return none level when no scores', async () => {
+  it('should return none level when no scores, with rolling_avg=0 and no certificate', async () => {
     const db = (t) => {
       if (t === 'ranking_configs') return chain(null);
       if (t === 'computed_scores') return chain([]);
@@ -72,11 +74,13 @@ describe('POST /api/rankings/compute', () => {
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.level, 'none');
+    assert.equal(res.body.rolling_avg, 0);
+    assert.ok(!res.body.certificate, 'no certificate on none level');
   });
 });
 
 describe('GET /api/rankings/leaderboard', () => {
-  it('should return paginated leaderboard', async () => {
+  it('should return paginated leaderboard with the exact pagination contract', async () => {
     const db = (t) => {
       if (t === 'rankings') return chain([{ count: '0' }]);
       return chain([]);
@@ -86,11 +90,13 @@ describe('GET /api/rankings/leaderboard', () => {
       headers: { Authorization: authHeader(FIXTURES.participantUser) },
     });
     assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.data), 'data must be an array');
+    assert.deepEqual(res.body.pagination, { page: 1, per_page: 50, total: 0, total_pages: 0 });
   });
 });
 
 describe('GET /api/rankings/me', () => {
-  it('should return user rankings', async () => {
+  it('should return user rankings as an empty array for a fresh user', async () => {
     const db = (t) => chain([]);
     db.raw = () => Promise.resolve({ rows: [] });
     const res = await req(buildApp(db), 'GET', '/api/rankings/me', {
@@ -98,11 +104,12 @@ describe('GET /api/rankings/me', () => {
     });
     assert.equal(res.status, 200);
     assert.ok(Array.isArray(res.body));
+    assert.equal(res.body.length, 0);
   });
 });
 
 describe('GET /api/rankings/certificates/me', () => {
-  it('should return user certificates', async () => {
+  it('should return user certificates array (empty for fresh user)', async () => {
     const db = (t) => chain([]);
     db.raw = () => Promise.resolve({ rows: [] });
     const res = await req(buildApp(db), 'GET', '/api/rankings/certificates/me', {
@@ -110,21 +117,24 @@ describe('GET /api/rankings/certificates/me', () => {
     });
     assert.equal(res.status, 200);
     assert.ok(Array.isArray(res.body));
+    assert.equal(res.body.length, 0);
   });
 });
 
 describe('GET /api/rankings/certificates/verify/:code', () => {
-  it('should return invalid for non-existent certificate', async () => {
+  it('should return valid=false with explicit "not found" message for unknown code', async () => {
     const db = (t) => chain(null);
     db.raw = () => Promise.resolve({ rows: [] });
     const res = await req(buildApp(db), 'GET', '/api/rankings/certificates/verify/fakecode');
     assert.equal(res.status, 200);
     assert.equal(res.body.valid, false);
+    assert.match(res.body.message, /not found/i);
+    assert.ok(!res.body.certificate, 'must not return certificate on invalid code');
   });
 });
 
 describe('GET /api/rankings/config', () => {
-  it('should return 403 for Participant', async () => {
+  it('should return 403 for Participant with an error envelope', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain([]);
@@ -135,9 +145,11 @@ describe('GET /api/rankings/config', () => {
       headers: { Authorization: authHeader(FIXTURES.participantUser) },
     });
     assert.equal(res.status, 403);
+    assert.ok(res.body.error, 'error envelope required on 403');
+    assert.equal(typeof res.body.error.message, 'string');
   });
 
-  it('should return configs for admin', async () => {
+  it('should return configs array for admin (shape check)', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -149,11 +161,12 @@ describe('GET /api/rankings/config', () => {
       headers: { Authorization: authHeader(FIXTURES.adminUser) },
     });
     assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body), 'configs endpoint must return an array');
   });
 });
 
 describe('POST /api/rankings/config', () => {
-  it('should return 400 without assessment_type', async () => {
+  it('should return 400 with error message naming assessment_type', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -165,5 +178,7 @@ describe('POST /api/rankings/config', () => {
       body: {},
     });
     assert.equal(res.status, 400);
+    assert.ok(res.body.error);
+    assert.match(res.body.error.message, /assessment_type/);
   });
 });

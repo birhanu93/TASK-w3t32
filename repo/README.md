@@ -255,26 +255,43 @@ All configuration is in `src/config/index.js`, driven by environment variables:
 
 ## Running Tests
 
-Run tests inside the app container:
+Tests run **inside the `app` container** via the Docker-first script
+`run_tests.sh`, which wraps `docker-compose exec` so every path matches
+what CI uses:
 
 ```bash
-# Full suite (390+ tests, unit + api)
-docker-compose exec app sh -c "NODE_ENV=test node --test tests/unit/*.test.js tests/api/*.test.js"
+# Default: unit + api (no DB dependency)
+./run_tests.sh
 
-# Unit tests only (pure functions, middleware — no DB required)
-docker-compose exec app sh -c "NODE_ENV=test node --test tests/unit/*.test.js"
-
-# API route tests only (HTTP-level with mock DB — no DB required)
-docker-compose exec app sh -c "NODE_ENV=test node --test tests/api/*.test.js"
-
-# Integration tests (runs against the live PostgreSQL instance)
-docker-compose exec app sh -c "NODE_ENV=test node --test tests/integration/*.test.js"
-
-# All tests including integration
-docker-compose exec app sh -c "NODE_ENV=test node --test tests/unit/*.test.js tests/api/*.test.js tests/integration/*.test.js"
+# Targets
+./run_tests.sh unit         # pure functions, middleware — no DB
+./run_tests.sh api          # HTTP tests with mocked DB
+./run_tests.sh integration  # no-mock DB-backed HTTP integration tests
+./run_tests.sh all          # unit + api + integration
+./run_tests.sh ci           # alias for `all` (CI path)
 ```
 
-Tests use Node.js built-in test runner (`node:test`) — no external test framework required. API tests mock the database layer and make real HTTP requests against Koa app instances. Integration tests run against the live PostgreSQL database provided by the `db` service in docker-compose.
+Equivalent raw commands (the script runs these for you):
+
+```bash
+# Unit
+docker-compose exec app sh -c "NODE_ENV=test node --test tests/unit/*.test.js"
+
+# API (mocked-DB HTTP)
+docker-compose exec app sh -c "NODE_ENV=test node --test tests/api/*.test.js"
+
+# Integration (real PostgreSQL in the sibling db service)
+docker-compose exec \
+  -e NODE_ENV=test -e DB_HOST=db -e DB_NAME=training_assessment_test \
+  app sh -c "node --test tests/integration/*.integration.test.js"
+```
+
+Tests use the Node.js built-in test runner (`node:test`) — no external
+test framework required. API tests mock only the database layer and make
+real HTTP requests against Koa app instances. Integration suites run
+against the live PostgreSQL `db` service; `run_tests.sh integration`
+(re)creates a throwaway `training_assessment_test` database before
+invoking the suites.
 
 ## API Overview
 

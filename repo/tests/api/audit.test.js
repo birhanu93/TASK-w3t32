@@ -54,7 +54,7 @@ describe('GET /api/audit/logs', () => {
     assert.equal(res.status, 401);
   });
 
-  it('should return 403 for non-admin', async () => {
+  it('should return 403 with an error envelope for non-admin', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain([]);
@@ -65,9 +65,11 @@ describe('GET /api/audit/logs', () => {
       headers: { Authorization: authHeader(FIXTURES.participantUser) },
     });
     assert.equal(res.status, 403);
+    assert.ok(res.body.error, '403 should include error envelope');
+    assert.equal(typeof res.body.error.message, 'string');
   });
 
-  it('should return audit logs for admin', async () => {
+  it('should return audit logs for admin with full pagination contract', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -79,6 +81,12 @@ describe('GET /api/audit/logs', () => {
       headers: { Authorization: authHeader(FIXTURES.adminUser) },
     });
     assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.data), 'data must be an array');
+    assert.ok(res.body.pagination, 'pagination envelope required');
+    assert.equal(res.body.pagination.page, 1);
+    assert.equal(res.body.pagination.per_page, 50);
+    assert.equal(res.body.pagination.total, 5, 'total must match mocked count');
+    assert.equal(res.body.pagination.total_pages, 1);
   });
 });
 
@@ -97,7 +105,7 @@ describe('GET /api/audit/logs/:id', () => {
     assert.equal(res.status, 404);
   });
 
-  it('should return single audit log', async () => {
+  it('should return a single audit log with all key fields', async () => {
     const log = { id: 'al1', action: 'user.login', actor_id: 'u1', created_at: new Date().toISOString() };
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
@@ -110,6 +118,9 @@ describe('GET /api/audit/logs/:id', () => {
       headers: { Authorization: authHeader(FIXTURES.adminUser) },
     });
     assert.equal(res.status, 200);
+    assert.equal(res.body.id, 'al1');
     assert.equal(res.body.action, 'user.login');
+    assert.equal(res.body.actor_id, 'u1');
+    assert.ok(res.body.created_at);
   });
 });

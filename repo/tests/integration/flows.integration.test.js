@@ -682,9 +682,12 @@ describe('Content and Moderation flow', () => {
       body: { title: 'My Training Log', content_type: 'article', body: 'Great workout today.' },
     });
     assert.equal(res.status, 201);
-    assert.equal(res.body.title, 'My Training Log');
-    assert.equal(res.body.author_id, participantUser.id);
-    contentItemId = res.body.id;
+    // POST /api/content returns { item, screening }
+    assert.ok(res.body.item, 'response should include item');
+    assert.equal(res.body.item.title, 'My Training Log');
+    assert.equal(res.body.item.author_id, participantUser.id);
+    assert.ok(res.body.screening, 'response should include screening result');
+    contentItemId = res.body.item.id;
   });
 
   it('should report content for moderation', async () => {

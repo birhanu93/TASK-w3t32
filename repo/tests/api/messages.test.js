@@ -91,7 +91,7 @@ describe('GET /api/messages/templates', () => {
 });
 
 describe('POST /api/messages/templates', () => {
-  it('should return 400 with missing fields', async () => {
+  it('should return 400 with an error payload listing the required fields', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -103,9 +103,12 @@ describe('POST /api/messages/templates', () => {
       body: { name: 'test' },
     });
     assert.equal(res.status, 400);
+    assert.ok(res.body.error, 'should include error envelope');
+    assert.match(res.body.error.message, /category|subject_template|body_template/i,
+      'error must reference missing required fields');
   });
 
-  it('should return 400 for invalid category', async () => {
+  it('should return 400 for invalid category with the allowed list in the message', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -117,6 +120,8 @@ describe('POST /api/messages/templates', () => {
       body: { name: 'test', category: 'invalid', subject_template: 'Hi', body_template: 'Hello' },
     });
     assert.equal(res.status, 400);
+    assert.match(res.body.error.message, /category must be one of/i);
+    assert.match(res.body.error.message, /enrollment/);
   });
 });
 
@@ -150,7 +155,7 @@ describe('POST /api/messages/send', () => {
     assert.equal(res.status, 400);
   });
 
-  it('should send direct message', async () => {
+  it('should send direct message and return the persisted message body', async () => {
     const msg = { id: 'm1', recipient_id: 'u1', subject: 'Hello', body: 'World' };
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
@@ -165,6 +170,10 @@ describe('POST /api/messages/send', () => {
       body: { recipient_id: 'u1', subject: 'Hello', body: 'World' },
     });
     assert.equal(res.status, 201);
+    assert.equal(res.body.id, 'm1');
+    assert.equal(res.body.recipient_id, 'u1');
+    assert.equal(res.body.subject, 'Hello');
+    assert.equal(res.body.body, 'World');
   });
 });
 

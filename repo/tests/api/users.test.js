@@ -77,7 +77,7 @@ describe('GET /api/users', () => {
     assert.equal(res.status, 403);
   });
 
-  it('should return paginated users for admin', async () => {
+  it('should return paginated users for admin with full pagination envelope', async () => {
     const db = (t) => {
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
       if (t === 'users') return chain([{ count: '2' }]);
@@ -89,6 +89,8 @@ describe('GET /api/users', () => {
       headers: { Authorization: authHeader(FIXTURES.adminUser) },
     });
     assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.data), 'data must be an array');
+    assert.deepEqual(res.body.pagination, { page: 1, per_page: 20, total: 2, total_pages: 1 });
   });
 });
 
@@ -129,7 +131,7 @@ describe('GET /api/users/:id', () => {
 });
 
 describe('POST /api/users/:id/roles', () => {
-  it('should return 400 when role_name missing', async () => {
+  it('should return 400 with an error message naming role_name', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -142,9 +144,11 @@ describe('POST /api/users/:id/roles', () => {
       body: {},
     });
     assert.equal(res.status, 400);
+    assert.ok(res.body.error);
+    assert.match(res.body.error.message, /role_name/);
   });
 
-  it('should return 404 when role not found', async () => {
+  it('should return 404 with an error envelope when role not found', async () => {
     const db = (t) => {
       if (t === 'users') return chain({ is_active: true });
       if (t === 'user_roles') return chain(ROLE_PERMISSIONS.Administrator);
@@ -158,6 +162,8 @@ describe('POST /api/users/:id/roles', () => {
       body: { role_name: 'NonExistent' },
     });
     assert.equal(res.status, 404);
+    assert.ok(res.body.error);
+    assert.match(res.body.error.message, /not found/i);
   });
 });
 

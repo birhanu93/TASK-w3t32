@@ -32,7 +32,9 @@ router.get('/', authenticate(), requirePermission('users.list'), async (ctx) => 
     });
   }
 
-  const [{ count }] = await query.clone().count();
+  // clearSelect() is required because the base query carries a column
+  // list — otherwise PG rejects `SELECT id, ..., count(*)` without GROUP BY.
+  const [{ count }] = await query.clone().clearSelect().count();
   const users = await query.orderBy('created_at', 'desc').offset(offset).limit(per_page);
 
   ctx.body = {

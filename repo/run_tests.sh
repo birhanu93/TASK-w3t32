@@ -1,92 +1,172 @@
 #!/usr/bin/env bash
 #
-# run_tests.sh — Run the full test suite for Training Assessment & Content Governance Backend
+# run_tests.sh — Docker-first test runner for the Training Assessment &
+# Content Governance Backend.
+#
+# Every target runs inside the `app` container via `docker-compose exec`,
+# mirroring the commands documented in README.md so CI and local runs use
+# the exact same code path as production.
 #
 # Usage:
-#   ./run_tests.sh              # Run unit + api tests (no DB required)
-#   ./run_tests.sh unit         # Run only unit tests
-#   ./run_tests.sh api          # Run only API tests
-#   ./run_tests.sh integration  # Run only integration tests (requires PostgreSQL)
-#   ./run_tests.sh ci           # Run ALL tests including integration (CI path)
+#   ./run_tests.sh              # unit + api (no DB required in container)
+#   ./run_tests.sh unit         # unit tests only
+#   ./run_tests.sh api          # API (mocked-DB HTTP) tests only
+#   ./run_tests.sh integration  # no-mock DB-backed HTTP integration tests
+#   ./run_tests.sh all          # unit + api + integration
+#   ./run_tests.sh ci           # alias for `all` — CI path
 #
-# Integration tests require a live PostgreSQL instance. Set TEST_DATABASE_URL
-# or DB_NAME=training_assessment_test to point at a throwaway database.
-# In CI, always use `./run_tests.sh ci` or `npm run test:ci` to include them.
+# Environment:
+#   COMPOSE — override compose command (default: auto-detect
+#     `docker compose` vs `docker-compose`)
+#   APP_SERVICE — compose service name for the app container (default: app)
+#   DB_SERVICE  — compose service name for the DB container  (default: db)
+#   TEST_DB_NAME — integration test database (default: training_assessment_test)
+#   INTEGRATION_DB_RESET — if "1", recreate the integration DB before running
+#     (default: "1" — always start from an empty DB)
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Install dependencies if node_modules is missing
-if [ ! -d "node_modules" ]; then
-  echo "Installing dependencies..."
-  npm install
-  echo ""
-fi
+TARGET="${1:-default}"
+APP_SERVICE="${APP_SERVICE:-app}"
+DB_SERVICE="${DB_SERVICE:-db}"
+TEST_DB_NAME="${TEST_DB_NAME:-training_assessment_test}"
+INTEGRATION_DB_RESET="${INTEGRATION_DB_RESET:-1}"
 
-export NODE_ENV=test
+# ── Resolve docker-compose invocation ──────────────────────────────────
+if [[ -z "${COMPOSE:-}" ]]; then
+  if docker compose version >/dev/null 2>&1; then
+    COMPOSE="docker compose"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE="docker-compose"
+  else
+    echo "ERROR: neither 'docker compose' nor 'docker-compose' is available." >&2
+    echo "This script is Docker-first — please install Docker Compose." >&2
+    exit 2
+  fi
+fi
 
 echo "=========================================="
 echo "  Training Assessment Backend — Test Suite"
+echo "  (Docker-first: all tests run inside the '$APP_SERVICE' container)"
 echo "=========================================="
 echo ""
 
-FAILED=0
-
-run_tests() {
-  local label="$1"
-  shift
-  echo "── $label ──"
-  if node --test "$@"; then
-    echo "  ✓ $label passed"
-  else
-    echo "  ✗ $label FAILED"
-    FAILED=1
+# ── Ensure the stack is up ─────────────────────────────────────────────
+ensure_stack_running() {
+  if ! $COMPOSE ps --status=running "$APP_SERVICE" >/dev/null 2>&1 || \
+     [[ -z "$($COMPOSE ps --status=running --services 2>/dev/null | grep -x "$APP_SERVICE" || true)" ]]; then
+    echo "→ Starting '$APP_SERVICE' + '$DB_SERVICE' (detached)..."
+    $COMPOSE up -d "$DB_SERVICE" "$APP_SERVICE"
   fi
+
+  echo "→ Waiting for Postgres to be ready..."
+  local retries=30
+  until $COMPOSE exec -T "$DB_SERVICE" pg_isready -U postgres >/dev/null 2>&1; do
+    retries=$((retries - 1))
+    if [[ $retries -le 0 ]]; then
+      echo "ERROR: Postgres did not become ready in time." >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  echo "→ Postgres ready."
   echo ""
 }
 
-if [[ "${1:-all}" == "unit" || "${1:-all}" == "all" || "${1:-all}" == "ci" ]]; then
-  run_tests "Unit: Config"                tests/unit/config.test.js
-  run_tests "Unit: Crypto"                tests/unit/crypto.test.js
-  run_tests "Unit: Errors"                tests/unit/errors.test.js
-  run_tests "Unit: Assessment Engine"     tests/unit/assessmentEngine.test.js
-  run_tests "Unit: Middleware"            tests/unit/middleware.test.js
-  run_tests "Unit: Field Encryption"      tests/unit/fieldEncryption.test.js
-  run_tests "Unit: RBAC Aliases"          tests/unit/rbacAliases.test.js
-  run_tests "Unit: Peer Percentile"       tests/unit/peerPercentile.test.js
-  run_tests "Unit: Audit Enforcement"     tests/unit/auditEnforcement.test.js
-  run_tests "Unit: ACL Inheritance/Deny"  tests/unit/aclInheritanceDeny.test.js
-  run_tests "Unit: Security Comprehensive" tests/unit/securityComprehensive.test.js
-  run_tests "Unit: Outlier Math"           tests/unit/outlierMath.test.js
-fi
-
-if [[ "${1:-all}" == "api" || "${1:-all}" == "all" || "${1:-all}" == "ci" ]]; then
-  run_tests "API: Auth"                   tests/api/auth.test.js
-  run_tests "API: Users"                  tests/api/users.test.js
-  run_tests "API: Plans"                  tests/api/plans.test.js
-  run_tests "API: Activity Logs"          tests/api/activityLogs.test.js
-  run_tests "API: Assessments"            tests/api/assessments.test.js
-  run_tests "API: Rankings"               tests/api/rankings.test.js
-  run_tests "API: Content"                tests/api/content.test.js
-  run_tests "API: Moderation"             tests/api/moderation.test.js
-  run_tests "API: Campaigns"              tests/api/campaigns.test.js
-  run_tests "API: Messages"               tests/api/messages.test.js
-  run_tests "API: Import/Export"          tests/api/importExport.test.js
-  run_tests "API: Resources"              tests/api/resources.test.js
-  run_tests "API: Audit"                  tests/api/audit.test.js
-  run_tests "API: Restore"               tests/api/restore.test.js
-  run_tests "API: Internal Endpoints"     tests/api/internalEndpoints.test.js
-  run_tests "API: Outlier Ingestion"      tests/api/outlierIngestion.test.js
-  run_tests "API: High-Risk Paths"       tests/api/highRiskPaths.test.js
-fi
-
-if [[ "${1:-}" == "integration" || "${1:-}" == "ci" ]]; then
+# ── Ensure the integration test DB exists (empty — migrations run per-suite) ──
+ensure_test_db() {
+  if [[ "$INTEGRATION_DB_RESET" == "1" ]]; then
+    echo "→ Resetting integration DB '$TEST_DB_NAME'..."
+    # Terminate any stale connections before dropping — previous test runs
+    # sometimes leave idle pg pools behind which block DROP DATABASE.
+    $COMPOSE exec -T "$DB_SERVICE" psql -U postgres -c \
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${TEST_DB_NAME}' AND pid <> pg_backend_pid()" \
+      >/dev/null 2>&1 || true
+    $COMPOSE exec -T "$DB_SERVICE" psql -U postgres -c "DROP DATABASE IF EXISTS ${TEST_DB_NAME}" >/dev/null
+  fi
+  echo "→ Ensuring integration DB '$TEST_DB_NAME' exists..."
+  $COMPOSE exec -T "$DB_SERVICE" psql -U postgres -tc \
+    "SELECT 1 FROM pg_database WHERE datname='${TEST_DB_NAME}'" | grep -q 1 || \
+    $COMPOSE exec -T "$DB_SERVICE" psql -U postgres -c "CREATE DATABASE ${TEST_DB_NAME}" >/dev/null
   echo ""
-  echo "── Integration Tests (requires PostgreSQL) ──"
-  run_tests "Integration: Hardening"      tests/integration/hardening.integration.test.js
-fi
+}
+
+# ── Run a test target inside the app container ─────────────────────────
+run_in_container() {
+  local label="$1"; shift
+  local env_prefix="$1"; shift
+  local pattern="$1"; shift
+
+  echo "── $label ──"
+  if $COMPOSE exec -T \
+       -e NODE_ENV=test \
+       $env_prefix \
+       "$APP_SERVICE" sh -c "node --test $pattern"; then
+    echo "  ✓ $label passed"
+    echo ""
+  else
+    echo "  ✗ $label FAILED"
+    echo ""
+    FAILED=1
+  fi
+}
+
+FAILED=0
+
+run_unit() {
+  run_in_container "Unit tests" \
+    "" \
+    "tests/unit/*.test.js"
+}
+
+run_api() {
+  run_in_container "API tests (mocked-DB HTTP)" \
+    "" \
+    "tests/api/*.test.js"
+}
+
+run_integration() {
+  ensure_test_db
+  # Integration suites share one test DB and each suite runs its own
+  # migrate:rollback + migrate:latest cycle. That means they MUST run
+  # serially — parallel runs deadlock on knex's migration lock.
+  # Integration suites talk to the sibling DB service on its internal
+  # network at DB_HOST=db (the compose service name).
+  run_in_container "Integration tests (real PostgreSQL, serial)" \
+    "-e DB_HOST=${DB_SERVICE} -e DB_PORT=5432 -e DB_NAME=${TEST_DB_NAME} -e DB_USER=postgres -e DB_PASSWORD=${DB_PASSWORD:-postgres}" \
+    "--test-concurrency=1 tests/integration/*.integration.test.js"
+}
+
+ensure_stack_running
+
+case "$TARGET" in
+  unit)
+    run_unit
+    ;;
+  api)
+    run_api
+    ;;
+  integration)
+    run_integration
+    ;;
+  all|ci)
+    run_unit
+    run_api
+    run_integration
+    ;;
+  default)
+    run_unit
+    run_api
+    ;;
+  *)
+    echo "Unknown target: $TARGET" >&2
+    echo "Usage: $0 [unit|api|integration|all|ci]" >&2
+    exit 2
+    ;;
+esac
 
 echo "=========================================="
 if [[ $FAILED -eq 0 ]]; then

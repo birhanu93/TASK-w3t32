@@ -434,18 +434,21 @@ describe('Assessment rules: strict validation', () => {
     assert.ok(res.body.error.message.includes('finite number'));
   });
 
-  it('should reject Infinity in min_bound', async () => {
+  it('should reject Infinity in min_bound (string form — JSON drops real Infinity)', async () => {
+    // `JSON.stringify(Infinity)` is `null`, so we send "Infinity" as a
+    // string. The route coerces via Number("Infinity") === Infinity and
+    // isFinite rejects it.
     const res = await request(server, 'POST', '/api/assessments/rules', {
       headers: { Authorization: `Bearer ${adminToken}` },
       body: {
         assessment_type: 'test_validation',
         scoring_items: [
-          { name: 'pushups', type: 'rep_count', weight: 1.0, min_bound: Infinity, max_bound: 100 },
+          { name: 'pushups', type: 'rep_count', weight: 1.0, min_bound: 'Infinity', max_bound: 100 },
         ],
       },
     });
-    // JSON.stringify(Infinity) becomes null, so it will be caught as non-finite
     assert.equal(res.status, 400);
+    assert.ok(res.body.error.message.includes('finite number'));
   });
 
   it('should reject min_bound >= max_bound', async () => {
